@@ -1,75 +1,90 @@
-# React + TypeScript + Vite
+ Three.js Visual QA
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository serves as a Proof of Concept (PoC) for implementing automated **Visual Quality Assurance (QA)** in 3D applications built with **React Three Fiber**.
 
-Currently, two official plugins are available:
+It addresses the specific challenge of validating WebGL contexts—where traditional DOM selectors are ineffective—by utilizing deterministic snapshot testing.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Technologies Used
 
-## React Compiler
+The project employs a modern stack optimized for performance and testing:
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+Core:** [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+3D Engine:** [Three.js](https://threejs.org/) with [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber).
+Build Tool:** [Vite](https://vitejs.dev/) (for rapid HMR).
+E2E Testing:** [Playwright](https://playwright.dev/) (for browser automation and screenshot comparison).
 
-Note: This will impact Vite dev & build performances.
+////Methodology: The Challenge of 3D QA
 
-## Expanding the ESLint configuration
+Testing 3D applications is inherently complex due to two main factors:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. Canvas Opacity: Content is rendered within a `<canvas>` element, lacking the internal HTML structure (e.g., `<div>`, `<button>`) required by standard DOM-based testing tools.
+2. Non-Determinism: Continuous animation loops result in frame-by-frame rendering variances, rendering direct visual comparison impossible without strict control.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Our Solution: Deterministic Rendering
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+We implement a strategy to enforce render consistency:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. *Testing Mode (`testing=true`):* The application accepts URL parameters to freeze the experience state.
+* In `src/Experience.tsx`, the presence of the testing flag halts animation loops and disables randomized physics.
+* The camera and subject entities are locked to fixed coordinates (0,0,0) to ensure identical framing across test runs.
+
+
+2. *State Injection:* Variable states (such as color configuration) are injected directly via URL parameters (e.g., `?color=red`), bypassing UI interaction requirements.
+
+/// Playwright and the "Daily Check" Strategy
+
+We utilize Playwright to execute an automated visual verification workflow, simulating a daily consistency check of the application's graphical output.
+
+/// The Test Cycle
+
+The test suite (`tests/visual.spec.ts`) executes the following logic:
+
+1. **Variant Iteration:** It iterates through a predefined array of critical test cases: `['red', 'green', 'blue']`.
+2. **Parameterized Navigation:**
+* Playwright initiates the browser and navigates to: `/?testing=true&color=red` (repeating for green and blue).
+* This forces the 3D scene to render the specific state in a static, predictable manner.
+
+
+3. Load Stabilization:** A safety timeout (3000ms) is observed to guarantee the full loading of 3D fonts, shaders, and textures.
+4. Snapshot Comparison:** A screenshot is captured and compared against the "Golden Master" (baseline image).
+* Filename format: `daily-check-red.png`, `daily-check-green.png`, etc.
+* *Threshold:* If the pixel difference exceeds *5% (maxDiffPixelRatio)**, the test fails, signaling a visual regression.
+
+############################################################################################
+
+ Installation and Usage
+
+ 1. Install Dependencies
+
+```bash
+npm install
+
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+ 2. Run Development Environment
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+To view the application with standard animations and physics:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
+
+```
+
+To manually verify the "test mode" in your browser, visit:
+`http://localhost:5173/?testing=true&color=blue`
+
+ 3. Run Visual Tests
+
+This command executes Playwright, generates the snapshots, and performs the comparison:
+
+```bash
+npx playwright test
+
+```
+
+If this is the initial run, or if intentional design changes have been made, generate new baseline images with:
+
+```bash
+npx playwright test --update-snapshots
+
 ```
