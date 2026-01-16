@@ -9,15 +9,15 @@ interface ExperienceProps {
 
 const BouncingText = ({ testing }: { testing: boolean }) => {
   const meshRef = useRef<THREE.Mesh>(null)
-  
+
   const { viewport } = useThree()
-  const velocity = useRef({ x: 5, y: 5 }) 
+  const velocity = useRef({ x: 5, y: 5 })
 
   const changeColor = () => {
     if (meshRef.current && meshRef.current.material instanceof THREE.MeshStandardMaterial) {
-        const colors = ['red', 'green', 'blue']
-        const randomColor = colors[Math.floor(Math.random() * colors.length)]
-        meshRef.current.material.color.set(randomColor)
+      const colors = ['red', 'green', 'blue']
+      const randomColor = colors[Math.floor(Math.random() * colors.length)]
+      meshRef.current.material.color.set(randomColor)
     }
   }
 
@@ -36,22 +36,17 @@ const BouncingText = ({ testing }: { testing: boolean }) => {
       }
       return
     }
-    
-    // 2. MODO SCREENSAVER DVD
-    
+
+
     // Movimiento
     meshRef.current.position.x += velocity.current.x * delta
     meshRef.current.position.y += velocity.current.y * delta
-    
-    // NO ROTAR: Para mantener el efecto DVD clásico, mantenemos la rotación estática
-    // Solo aplicamos una ligera inclinación fija si no se ha aplicado ya (podemos hacerlo en el render inicial o dejarlo fijo)
-    // Aquí forzamos una ligera inclinación para que se vea el 3D, pero no gira.
+
     meshRef.current.rotation.x = 0.2
     meshRef.current.rotation.y = 0.1
 
-    // Límites de rebote (ajustados para Text3D que suele ser más ancho/alto según la fuente)
-    // Ajustamos un poco los márgenes porque el Text3D con Center puede variar
-    const halfWidth = (viewport.width / 2) - 2.8 
+
+    const halfWidth = (viewport.width / 2) - 2.8
     const halfHeight = (viewport.height / 2) - 1.0
 
     let bounced = false
@@ -75,7 +70,7 @@ const BouncingText = ({ testing }: { testing: boolean }) => {
         ref={meshRef}
         font="/fonts/helvetiker_bold.typeface.json" // Fuente estándar
         size={2}
-        height={0.5} // Esto es el EXTRUDE
+        height={0.5} // EXTRUDE
         curveSegments={12}
         bevelEnabled
         bevelThickness={0.1}
@@ -97,9 +92,9 @@ export const Experience = ({ testing = false }: ExperienceProps) => {
         gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [0, 0, 10] }}
       >
-        <ambientLight intensity={0.5} /> 
+        <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1.5} />
-        
+
         <BouncingText testing={testing} />
 
       </Canvas>
