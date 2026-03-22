@@ -1,83 +1,173 @@
 # Three.js Visual QA
 
-This repository serves as a Proof of Concept (PoC) for implementing automated **Visual Quality Assurance (QA)** in 3D applications built with **React Three Fiber**.
+[![Playwright](https://img.shields.io/badge/Playwright-E2E_Testing-45ba4b?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![React Three Fiber](https://img.shields.io/badge/R3F-React_Three_Fiber-61DAFB?style=flat-square&logo=react&logoColor=black)](https://docs.pmnd.rs/react-three-fiber)
+[![WebGL](https://img.shields.io/badge/WebGL-Canvas_Testing-990000?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API)
+[![Three.js](https://img.shields.io/badge/Three.js-r180+-black?style=flat-square&logo=threedotjs)](https://threejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
 
-It addresses the specific challenge of validating WebGL contexts—where traditional DOM selectors are ineffective—by utilizing deterministic snapshot testing.
-
-## Technologies Used
-
-The project employs a modern stack optimized for performance and testing:
-
-- **Core:** [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- **3D Engine:** [Three.js](https://threejs.org/) with [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber).
-- **Build Tool:** [Vite](https://vitejs.dev/) (for rapid HMR).
-- **E2E Testing:** [Playwright](https://playwright.dev/) (for browser automation and screenshot comparison).
-
-## Methodology: The Challenge of 3D QA
-
-Testing 3D applications is inherently complex due to two main factors:
-
-1. **Canvas Opacity:** Content is rendered within a `<canvas>` element, lacking the internal HTML structure (e.g., `<div>`, `<button>`) required by standard DOM-based testing tools.
-2. **Non-Determinism:** Continuous animation loops result in frame-by-frame rendering variances, rendering direct visual comparison impossible without strict control.
-
-### Our Solution: Deterministic Rendering
-
-We implement a strategy to enforce render consistency:
-
-1. **Testing Mode (`testing=true`):** The application accepts URL parameters to freeze the experience state.
-    - In `src/Experience.tsx`, the presence of the testing flag halts animation loops and disables randomized physics.
-    - The camera and subject entities are locked to fixed coordinates (0,0,0) to ensure identical framing across test runs.
-
-2. **State Injection:** Variable states (such as color configuration) are injected directly via URL parameters (e.g., `?color=red`), bypassing UI interaction requirements.
-
-## Playwright and the "Daily Check" Strategy
-
-We utilize Playwright to execute an automated visual verification workflow, simulating a daily consistency check of the application's graphical output.
-
-### The Test Cycle
-
-The test suite (`tests/visual.spec.ts`) executes the following logic:
-
-1. **Variant Iteration:** It iterates through a predefined array of critical test cases: `['red', 'green', 'blue']`.
-2. **Parameterized Navigation:**
-    - Playwright initiates the browser and navigates to: `/?testing=true&color=red` (repeating for green and blue).
-    - This forces the 3D scene to render the specific state in a static, predictable manner.
-3. **Load Stabilization:** A safety timeout (3000ms) is observed to guarantee the full loading of 3D fonts, shaders, and textures.
-4. **Snapshot Comparison:** A screenshot is captured and compared against the "Golden Master" (baseline image).
-    - Filename format: `daily-check-red.png`, `daily-check-green.png`, etc.
-    - **Threshold:** If the pixel difference exceeds *5% (maxDiffPixelRatio)*, the test fails, signaling a visual regression.
+> **Proof of Concept:** Automated Visual QA for React Three Fiber applications using Playwright snapshot testing. Solves the fundamental problem of testing WebGL content that lives inside an opaque `<canvas>` element.
 
 ---
 
-## Installation and Usage
+## 🔴 The Problem
 
-### 1. Install Dependencies
+Standard DOM-based testing tools fail entirely on 3D web apps:
 
-```bash
-npm install
+```
+DOM Testing (works for normal UIs)         Canvas Testing (this project)
+──────────────────────────────────         ──────────────────────────────
+<body>                                     <body>
+  <div id="app">                             <div id="app">
+    <button>Click me</button>  ✅              <canvas>          ← opaque
+    <h1>Title</h1>             ✅                ┌─────────────┐
+    <input type="text"/>       ✅                │ 3D Scene    │ ✗ no DOM
+  </div>                                        │  meshes     │ ✗ no selectors
+</body>                                         │  shaders    │ ✗ no aria
+                                                │  particles  │ ✗ no a11y tree
+                                              └─────────────┘
+                                            </canvas>
+                                          </div>
+                                        </body>
+
+querySelector('#mesh-color') → null ✗   Screenshot diff → pixel delta ✅
+getByRole('sphere') → not found ✗       Golden master comparison ✅
+expect(scene).toHaveText() → ✗          maxDiffPixelRatio: 0.05 ✅
 ```
 
-### 2. Run Development Environment
+**The canvas is a black box to the DOM.** This project solves it with deterministic rendering + visual snapshot comparison.
 
-To view the application with standard animations and physics:
+---
 
+## 💡 The Solution: Deterministic Rendering
+
+We enforce render consistency through two mechanisms:
+
+**1. Testing Mode via URL parameter**
+```
+http://localhost:5173/?testing=true&color=red
+```
+When `testing=true`:
+- Animation loops are **frozen** (no frame-to-frame variance)
+- Randomized physics are **disabled**
+- Camera is **locked** to `(0, 0, 0)` for identical framing
+
+**2. State injection via URL params**
+State (color, geometry variant, etc.) is passed as URL parameters — bypassing UI interaction and making every test run deterministic.
+
+---
+
+## 🔁 How Tests Work
+
+```
+Playwright Test Runner
+        │
+        ├─ iterate ['red', 'green', 'blue']
+        │
+        ├─ navigate → /?testing=true&color=red
+        │
+        ├─ wait 3000ms  ← textures, shaders, fonts fully loaded
+        │
+        ├─ screenshot → daily-check-red.png
+        │
+        └─ compare vs golden master
+              maxDiffPixelRatio: 0.05
+              if diff > 5% → FAIL (visual regression detected)
+```
+
+Test file: `tests/visual.spec.ts`
+Golden masters: `tests/visual.spec.ts-snapshots/`
+
+---
+
+## 📦 Use Cases
+
+### CI/CD Pipelines
+Run visual regression tests on every PR — catch unintended shader changes, material breakage, or geometry regressions before they ship.
+
+### 3D Design Systems
+Validate that your 3D component library renders consistently across versions. A design token change that breaks a material gets caught automatically.
+
+### WebGL Regression Testing
+When upgrading Three.js versions, run the snapshot suite to detect any rendering differences introduced by the new renderer.
+
+### Automated Daily Checks
+Schedule the test suite to run nightly against production — detect WebGPU/driver-induced visual drift over time.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Tech |
+|---|---|
+| 3D Engine | Three.js + React Three Fiber |
+| Testing | Playwright (screenshot comparison) |
+| Frontend | React 19 + TypeScript |
+| Build | Vite |
+| Test Strategy | Deterministic rendering + golden master |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Install dependencies
+```bash
+npm install
+npx playwright install
+```
+
+### 2. Run the dev server
 ```bash
 npm run dev
 ```
 
-To manually verify the "test mode" in your browser, visit:
-`http://localhost:5173/?testing=true&color=blue`
+Verify test mode manually: `http://localhost:5173/?testing=true&color=blue`
 
-### 3. Run Visual Tests
-
-This command executes Playwright, generates the snapshots, and performs the comparison:
-
+### 3. Run visual tests
 ```bash
 npx playwright test
 ```
 
-If this is the initial run, or if intentional design changes have been made, generate new baseline images with:
-
+### 4. Update golden masters (after intentional design changes)
 ```bash
 npx playwright test --update-snapshots
 ```
+
+---
+
+## 📁 Structure
+
+```
+threejs-visual-qa/
+├── src/
+│   ├── Experience.tsx     # 3D scene (handles testing= param)
+│   └── main.tsx
+├── tests/
+│   ├── visual.spec.ts     # Playwright snapshot test suite
+│   └── visual.spec.ts-snapshots/  # Golden master images
+└── vite.config.ts
+```
+
+---
+
+## 🔑 Key Implementation: `Experience.tsx`
+
+```tsx
+// Testing mode disables non-determinism
+const isTesting = new URLSearchParams(window.location.search).get('testing') === 'true'
+const color = new URLSearchParams(window.location.search).get('color') ?? 'white'
+
+useFrame((state, delta) => {
+  if (isTesting) return  // ← freeze animation
+  // ... normal animation loop
+})
+```
+
+---
+
+## 👨‍💻 About
+
+Built by **Gabriel** — Creative 3D Developer & Technical Artist with a focus on production-quality Three.js/R3F applications, including testing infrastructure for complex WebGL scenes.
+
+> 💼 **Available for freelance** — 3D web apps, WebGL/WebGPU rendering, testing infrastructure for creative codebases, and frontend engineering. [Let's connect →](https://github.com/yomero243)
